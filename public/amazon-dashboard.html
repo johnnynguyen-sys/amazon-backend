@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon Hub — Seller Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Cabinet+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f0e8; --bg2: #ede8de; --surface: #fff;
+    --border: #d4cfc4; --ink: #1a1612; --ink2: #4a4540;
+    --muted: #9a9590; --amazon: #ff9500; --amazon-dark: #e07800;
+    --green: #1a7a4a; --red: #c0392b; --blue: #1a4a8a;
+    --mono: 'Space Mono', monospace; --sans: 'Cabinet Grotesk', sans-serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--ink); font-family:var(--sans); min-height:100vh; display:flex; }
+
+  /* SIDEBAR */
+  .sidebar {
+    width:220px; min-height:100vh; background:var(--ink); color:var(--bg);
+    display:flex; flex-direction:column; position:fixed; top:0; left:0; bottom:0; z-index:100; overflow-y:auto;
+  }
+  .logo-area { padding:24px 20px 18px; border-bottom:1px solid rgba(255,255,255,0.1); }
+  .logo { font-size:20px; font-weight:800; display:flex; align-items:center; gap:8px; }
+  .logo-icon { width:28px;height:28px;background:var(--amazon);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:15px; }
+  .logo-sub { font-family:var(--mono);font-size:9px;color:rgba(255,255,255,0.35);letter-spacing:2px;text-transform:uppercase;margin-top:4px; }
+  .nav { padding:16px 0; flex:1; }
+  .nav-label { font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.3);padding:14px 20px 6px; }
+  .nav-item {
+    display:flex;align-items:center;gap:10px;padding:10px 20px;cursor:pointer;
+    font-size:13px;font-weight:600;color:rgba(255,255,255,0.55);
+    border-left:3px solid transparent;transition:all 0.15s;
+  }
+  .nav-item:hover { color:#fff;background:rgba(255,255,255,0.05); }
+  .nav-item.active { color:var(--amazon);border-left-color:var(--amazon);background:rgba(255,149,0,0.08); }
+  .nav-icon { font-size:15px; width:18px; text-align:center; }
+
+  /* Connection status area */
+  .conn-status {
+    margin:16px 14px; background:rgba(255,255,255,0.05);
+    border-radius:8px; padding:12px; border:1px solid rgba(255,255,255,0.08);
+  }
+  .conn-title { font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.35);margin-bottom:8px; }
+  .conn-row { display:flex;align-items:center;justify-content:space-between;padding:3px 0;font-size:11px;color:rgba(255,255,255,0.55); }
+  .conn-dot { width:7px;height:7px;border-radius:50%;background:#555;transition:all 0.3s; }
+  .conn-dot.ok { background:#00e676;box-shadow:0 0 6px #00e676; }
+  .conn-dot.err { background:#ff5252; }
+  .conn-dot.checking { background:var(--amazon);animation:pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+
+  /* MAIN */
+  .main { margin-left:220px; flex:1; display:flex; flex-direction:column; }
+  .topbar {
+    background:var(--surface);border-bottom:1px solid var(--border);
+    padding:0 28px;height:56px;display:flex;align-items:center;
+    justify-content:space-between;position:sticky;top:0;z-index:50;
+  }
+  .page-title { font-size:16px;font-weight:800; }
+  .page-sub { font-size:11px;color:var(--muted);font-family:var(--mono); }
+  .topbar-right { display:flex;align-items:center;gap:12px; }
+  .api-url-input {
+    font-family:var(--mono);font-size:11px;border:1.5px solid var(--border);
+    border-radius:6px;padding:6px 10px;background:var(--bg);color:var(--ink);
+    width:220px;
+  }
+  .api-url-input:focus { outline:none;border-color:var(--amazon); }
+  .refresh-btn {
+    background:var(--amazon);color:var(--ink);border:none;padding:8px 16px;
+    border-radius:6px;font-family:var(--sans);font-weight:700;font-size:12px;
+    cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:6px;
+  }
+  .refresh-btn:hover { background:var(--amazon-dark); }
+
+  .content { padding:24px 28px; flex:1; }
+
+  /* ALERT BANNER */
+  .alert {
+    border-radius:10px;padding:16px 20px;margin-bottom:20px;
+    display:flex;align-items:center;gap:14px;
+  }
+  .alert.warning { background:#fff8e1;border:1.5px solid var(--amazon); }
+  .alert.success { background:#e8f5e9;border:1.5px solid var(--green); }
+  .alert.error { background:#ffebee;border:1.5px solid var(--red); }
+  .alert-icon { font-size:22px;flex-shrink:0; }
+  .alert-text h3 { font-size:14px;font-weight:700;margin-bottom:3px; }
+  .alert-text p { font-size:12px;color:var(--ink2); }
+  .alert-text a { color:var(--blue);text-decoration:underline; }
+  .alert-btn {
+    margin-left:auto;background:var(--ink);color:#fff;border:none;
+    padding:8px 16px;border-radius:7px;font-family:var(--sans);font-weight:700;
+    font-size:12px;cursor:pointer;white-space:nowrap;flex-shrink:0;
+  }
+
+  /* TABS */
+  .tabs { display:flex;gap:3px;margin-bottom:24px;background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:3px;width:fit-content; }
+  .tab { padding:8px 18px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.15s;color:var(--muted);border:none;background:transparent;font-family:var(--sans);display:flex;align-items:center;gap:6px; }
+  .tab:hover { color:var(--ink); }
+  .tab.active { background:var(--surface);color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,0.1); }
+
+  /* PANELS */
+  .panel { display:none;animation:fadeIn 0.25s ease; }
+  .panel.active { display:block; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none} }
+
+  /* STATS GRID */
+  .stats-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px; }
+  .stat-card {
+    background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:18px;
+    position:relative;overflow:hidden;transition:transform 0.2s,box-shadow 0.2s;cursor:default;
+  }
+  .stat-card:hover { transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,0.07); }
+  .stat-card::after { content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--card-accent,var(--amazon)); }
+  .stat-label { font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px; }
+  .stat-value { font-size:24px;font-weight:800;letter-spacing:-0.5px; }
+  .stat-sub { font-family:var(--mono);font-size:10px;margin-top:5px;color:var(--muted); }
+  .stat-icon { position:absolute;right:14px;top:14px;font-size:22px;opacity:0.12; }
+
+  /* GRID */
+  .grid-2 { display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px; }
+  .card { background:var(--surface);border:1px solid var(--border);border-radius:11px;overflow:hidden; }
+  .card-header { padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between; }
+  .card-title { font-size:13px;font-weight:700; }
+  .card-body { padding:18px; }
+  .card-badge { font-family:var(--mono);font-size:9px;padding:3px 8px;border-radius:4px;font-weight:700;letter-spacing:0.5px; }
+
+  /* TABLE */
+  .data-table { width:100%;border-collapse:collapse;font-size:12px; }
+  .data-table th { text-align:left;font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);padding:9px 12px;border-bottom:1px solid var(--border);font-weight:700; }
+  .data-table td { padding:11px 12px;border-bottom:1px solid var(--bg2);vertical-align:middle; }
+  .data-table tr:last-child td { border-bottom:none; }
+  .data-table tr:hover td { background:var(--bg2); }
+
+  .badge { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;font-family:var(--mono); }
+  .badge.shipped,.badge.Shipped { background:#e8f5e9;color:var(--green); }
+  .badge.Pending,.badge.pending { background:#fff8e1;color:#e65100; }
+  .badge.Delivered,.badge.delivered { background:#e3f2fd;color:var(--blue); }
+  .badge.Canceled,.badge.Cancelled,.badge.cancelled { background:#ffebee;color:var(--red); }
+  .badge.fba { background:#e3f2fd;color:var(--blue); }
+  .badge.fbm { background:#f3e5f5;color:#5a2d8a; }
+
+  /* INVENTORY BAR */
+  .inv-item { margin-bottom:12px; }
+  .inv-label { display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px; }
+  .inv-bar { height:7px;background:var(--bg2);border-radius:4px;overflow:hidden; }
+  .inv-fill { height:100%;border-radius:4px;transition:width 1s ease; }
+
+  /* CHART */
+  .chart-wrap { position:relative;height:200px; }
+
+  /* LOADING / EMPTY */
+  .state-msg { display:flex;flex-direction:column;align-items:center;justify-content:center;padding:50px;color:var(--muted);gap:12px; }
+  .spinner { width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--amazon);border-radius:50%;animation:spin 0.8s linear infinite; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+
+  /* TOAST */
+  .toast { position:fixed;bottom:20px;right:20px;background:var(--ink);color:#fff;padding:12px 18px;border-radius:9px;font-size:12px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,0.2);transform:translateY(80px);opacity:0;transition:all 0.3s;z-index:300;display:flex;align-items:center;gap:8px; }
+  .toast.show { transform:translateY(0);opacity:1; }
+
+  @media(max-width:1100px){.stats-grid{grid-template-columns:repeat(2,1fr)}.grid-2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="logo-area">
+    <div class="logo"><div class="logo-icon">📦</div>AmazonHub</div>
+    <div class="logo-sub">SP-API Dashboard</div>
+  </div>
+  <nav class="nav">
+    <div class="nav-label">Menu</div>
+    <div class="nav-item active" onclick="showTab('overview',this)"><span class="nav-icon">📊</span>Overview</div>
+    <div class="nav-item" onclick="showTab('orders',this)"><span class="nav-icon">🛒</span>Orders</div>
+    <div class="nav-item" onclick="showTab('inventory',this)"><span class="nav-icon">📦</span>Inventory</div>
+    <div class="nav-item" onclick="showTab('analytics',this)"><span class="nav-icon">📈</span>Analytics</div>
+  </nav>
+  <div class="conn-status">
+    <div class="conn-title">API Status</div>
+    <div class="conn-row"><span>Backend</span><div class="conn-dot checking" id="dot-backend"></div></div>
+    <div class="conn-row"><span>SP-API</span><div class="conn-dot checking" id="dot-spapi"></div></div>
+    <div class="conn-row"><span>LWA Token</span><div class="conn-dot checking" id="dot-lwa"></div></div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="topbar">
+    <div>
+      <div class="page-title" id="page-title">Dashboard Overview</div>
+      <div class="page-sub" id="last-sync">Not synced yet</div>
+    </div>
+    <div class="topbar-right">
+      <input class="api-url-input" id="api-url" value="http://localhost:3001" placeholder="Backend URL">
+      <button class="refresh-btn" onclick="loadAll()">↻ Refresh</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ALERT AREA -->
+    <div id="alert-area"></div>
+
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('overview',null,this)">📊 Overview</button>
+      <button class="tab" onclick="showTab('orders',null,this)">🛒 Orders</button>
+      <button class="tab" onclick="showTab('inventory',null,this)">📦 Inventory</button>
+      <button class="tab" onclick="showTab('analytics',null,this)">📈 Analytics</button>
+    </div>
+
+    <!-- ── OVERVIEW ── -->
+    <div class="panel active" id="panel-overview">
+      <div class="stats-grid">
+        <div class="stat-card" style="--card-accent:#ff9500"><div class="stat-icon">💰</div><div class="stat-label">30-Day Revenue</div><div class="stat-value" id="ov-revenue">—</div><div class="stat-sub" id="ov-orders-count">Loading…</div></div>
+        <div class="stat-card" style="--card-accent:#1a7a4a"><div class="stat-icon">📦</div><div class="stat-label">Total Orders</div><div class="stat-value" id="ov-orders">—</div><div class="stat-sub" id="ov-avg">Avg order value</div></div>
+        <div class="stat-card" style="--card-accent:#1a4a8a"><div class="stat-icon">🏭</div><div class="stat-label">Inventory SKUs</div><div class="stat-value" id="ov-skus">—</div><div class="stat-sub" id="ov-lowstock">Low stock items</div></div>
+        <div class="stat-card" style="--card-accent:#c0392b"><div class="stat-icon">⚠️</div><div class="stat-label">Pending Orders</div><div class="stat-value" id="ov-pending">—</div><div class="stat-sub">Needs fulfillment</div></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Revenue (30 days)</span><span class="card-badge" style="background:#fff8e1;color:#e07800">SP-API LIVE</span></div>
+          <div class="card-body"><div class="chart-wrap"><canvas id="revenueChart"></canvas></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Order Status Breakdown</span></div>
+          <div class="card-body"><div class="chart-wrap"><canvas id="statusChart"></canvas></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Recent Orders</span><span class="card-badge" style="background:#e8f5e9;color:#1a7a4a">LIVE DATA</span></div>
+        <div class="card-body" style="padding:0"><table class="data-table"><thead><tr><th>Order ID</th><th>Items</th><th>Revenue</th><th>Date</th><th>Channel</th><th>Status</th></tr></thead><tbody id="overview-orders"><tr><td colspan="6"><div class="state-msg"><div class="spinner"></div></div></td></tr></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- ── ORDERS ── -->
+    <div class="panel" id="panel-orders">
+      <div class="stats-grid">
+        <div class="stat-card" style="--card-accent:#ff9500"><div class="stat-icon">📋</div><div class="stat-label">Total Orders</div><div class="stat-value" id="ord-total">—</div></div>
+        <div class="stat-card" style="--card-accent:#1a7a4a"><div class="stat-icon">📬</div><div class="stat-label">Shipped</div><div class="stat-value" id="ord-shipped">—</div></div>
+        <div class="stat-card" style="--card-accent:#e07800"><div class="stat-icon">⏳</div><div class="stat-label">Pending</div><div class="stat-value" id="ord-pending">—</div></div>
+        <div class="stat-card" style="--card-accent:#1a4a8a"><div class="stat-icon">✅</div><div class="stat-label">FBA Orders</div><div class="stat-value" id="ord-fba">—</div></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">All Orders (Last 30 Days)</span>
+          <div style="display:flex;gap:8px">
+            <select id="ord-status-filter" onchange="filterOrders()" style="font-family:var(--mono);font-size:11px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;background:var(--bg)">
+              <option value="">All Statuses</option>
+              <option value="Pending">Pending</option>
+              <option value="Unshipped">Unshipped</option>
+              <option value="Shipped">Shipped</option>
+              <option value="Delivered">Delivered</option>
+              <option value="Canceled">Canceled</option>
+            </select>
+          </div>
+        </div>
+        <div class="card-body" style="padding:0">
+          <table class="data-table">
+            <thead><tr><th>Order ID</th><th>Items</th><th>Total</th><th>Purchase Date</th><th>Fulfillment</th><th>Status</th></tr></thead>
+            <tbody id="orders-tbody"><tr><td colspan="6"><div class="state-msg"><div class="spinner"></div></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── INVENTORY ── -->
+    <div class="panel" id="panel-inventory">
+      <div class="stats-grid">
+        <div class="stat-card" style="--card-accent:#ff9500"><div class="stat-icon">📦</div><div class="stat-label">Total SKUs</div><div class="stat-value" id="inv-total">—</div></div>
+        <div class="stat-card" style="--card-accent:#c0392b"><div class="stat-icon">⚠️</div><div class="stat-label">Low Stock</div><div class="stat-value" id="inv-low">—</div><div class="stat-sub">Under 10 units</div></div>
+        <div class="stat-card" style="--card-accent:#1a7a4a"><div class="stat-icon">✅</div><div class="stat-label">Healthy Stock</div><div class="stat-value" id="inv-healthy">—</div></div>
+        <div class="stat-card" style="--card-accent:#1a4a8a"><div class="stat-icon">🔄</div><div class="stat-label">Reserved</div><div class="stat-value" id="inv-reserved">—</div></div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Inventory Levels by SKU</span><span class="card-badge" style="background:#e3f2fd;color:#1a4a8a">FBA</span></div>
+          <div class="card-body"><div id="inv-bars"><div class="state-msg"><div class="spinner"></div></div></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Stock Distribution</span></div>
+          <div class="card-body"><div class="chart-wrap"><canvas id="stockChart"></canvas></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Full Inventory List</span></div>
+        <div class="card-body" style="padding:0">
+          <table class="data-table">
+            <thead><tr><th>SKU</th><th>ASIN</th><th>Product</th><th>Fulfillable</th><th>Reserved</th><th>Unfulfillable</th><th>Total</th></tr></thead>
+            <tbody id="inv-tbody"><tr><td colspan="7"><div class="state-msg"><div class="spinner"></div></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── ANALYTICS ── -->
+    <div class="panel" id="panel-analytics">
+      <div class="stats-grid">
+        <div class="stat-card" style="--card-accent:#ff9500"><div class="stat-icon">💵</div><div class="stat-label">Total Sales</div><div class="stat-value" id="an-sales">—</div></div>
+        <div class="stat-card" style="--card-accent:#1a7a4a"><div class="stat-icon">📦</div><div class="stat-label">Units Sold</div><div class="stat-value" id="an-units">—</div></div>
+        <div class="stat-card" style="--card-accent:#1a4a8a"><div class="stat-icon">🛒</div><div class="stat-label">Order Count</div><div class="stat-value" id="an-count">—</div></div>
+        <div class="stat-card" style="--card-accent:#5a2d8a"><div class="stat-icon">💲</div><div class="stat-label">Avg Unit Price</div><div class="stat-value" id="an-avg-price">—</div></div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Daily Sales</span>
+            <select id="an-days" onchange="loadAnalytics()" style="font-family:var(--mono);font-size:11px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;background:var(--bg)">
+              <option value="7">7 days</option>
+              <option value="30" selected>30 days</option>
+              <option value="90">90 days</option>
+            </select>
+          </div>
+          <div class="card-body"><div class="chart-wrap"><canvas id="salesChart"></canvas></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Units per Day</span></div>
+          <div class="card-body"><div class="chart-wrap"><canvas id="unitsChart"></canvas></div></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</main>
+
+<!-- TOAST -->
+<div class="toast" id="toast"><span id="toast-icon">✅</span><span id="toast-msg"></span></div>
+
+<script>
+// ── CONFIG ──
+const API = () => document.getElementById('api-url').value.replace(/\/$/, '');
+let ordersData = [];
+let charts = {};
+
+// ── NAV ──
+function showTab(id, navEl, tabEl) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  if (navEl) navEl.classList.add('active');
+  if (tabEl) tabEl.classList.add('active');
+  const titles = { overview:'Dashboard Overview', orders:'Orders', inventory:'Inventory', analytics:'Sales Analytics' };
+  document.getElementById('page-title').textContent = titles[id] || id;
+}
+
+// ── TOAST ──
+function toast(icon, msg) {
+  document.getElementById('toast-icon').textContent = icon;
+  document.getElementById('toast-msg').textContent = msg;
+  const t = document.getElementById('toast');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── ALERT ──
+function setAlert(type, icon, title, msg, btnText, btnFn) {
+  const a = document.getElementById('alert-area');
+  if (!type) { a.innerHTML = ''; return; }
+  a.innerHTML = `<div class="alert ${type}">
+    <div class="alert-icon">${icon}</div>
+    <div class="alert-text"><h3>${title}</h3><p>${msg}</p></div>
+    ${btnText ? `<button class="alert-btn" onclick="${btnFn}">${btnText}</button>` : ''}
+  </div>`;
+}
+
+// ── API FETCH ──
+async function apiFetch(path) {
+  const res = await fetch(API() + path);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+// ── CHECK BACKEND + SP-API STATUS ──
+async function checkStatus() {
+  const dots = { backend: document.getElementById('dot-backend'), spapi: document.getElementById('dot-spapi'), lwa: document.getElementById('dot-lwa') };
+
+  try {
+    // 1. Check backend health
+    await apiFetch('/health');
+    dots.backend.className = 'conn-dot ok';
+
+    // 2. Check SP-API status
+    const status = await apiFetch('/api/auth/status');
+
+    dots.lwa.className = 'conn-dot ' + (status.checks?.lwaToken?.ok ? 'ok' : 'err');
+    dots.spapi.className = 'conn-dot ' + (status.checks?.spApi?.ok ? 'ok' : 'err');
+
+    if (status.connected) {
+      setAlert('success', '✅', 'Connected to Amazon SP-API', 'Live data is flowing from your Seller Central account.');
+      return true;
+    } else {
+      const missing = status.checks?.envVars?.missing || [];
+      if (missing.length > 0) {
+        setAlert('warning', '🔑', 'Credentials needed', `Missing: ${missing.join(', ')}. See SETUP_GUIDE.md to configure your .env file.`);
+      } else if (!status.checks?.lwaToken?.ok) {
+        setAlert('error', '❌', 'LWA Token Error', status.checks.lwaToken.error || 'Check your LWA_CLIENT_ID and LWA_CLIENT_SECRET');
+      } else {
+        setAlert('error', '❌', 'SP-API Error', status.checks.spApi.error || 'Check your AWS credentials and SP-API app setup');
+      }
+      return false;
+    }
+  } catch (err) {
+    dots.backend.className = 'conn-dot err';
+    dots.lwa.className = 'conn-dot err';
+    dots.spapi.className = 'conn-dot err';
+    setAlert('error', '🔴', 'Backend Not Running',
+      `Cannot reach backend at ${API()}. Start it with: <strong>cd amazon-backend && npm start</strong>`);
+    return false;
+  }
+}
+
+// ── LOAD ALL DATA ──
+async function loadAll() {
+  const ok = await checkStatus();
+  if (!ok) return;
+
+  document.getElementById('last-sync').textContent = 'Syncing…';
+  toast('🔄', 'Loading live data from SP-API…');
+
+  await Promise.allSettled([
+    loadOverview(),
+    loadOrders(),
+    loadInventory(),
+    loadAnalytics(),
+  ]);
+
+  document.getElementById('last-sync').textContent = 'Last sync: ' + new Date().toLocaleTimeString();
+  toast('✅', 'Dashboard updated with live data');
+}
+
+// ── OVERVIEW ──
+async function loadOverview() {
+  try {
+    const [rev, orders] = await Promise.all([
+      apiFetch('/api/orders/summary/revenue?days=30'),
+      apiFetch('/api/orders?days=30&limit=10'),
+    ]);
+
+    document.getElementById('ov-revenue').textContent = '$' + (rev.totalRevenue || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
+    document.getElementById('ov-orders').textContent = rev.totalOrders || 0;
+    document.getElementById('ov-orders-count').textContent = `${rev.currency || 'USD'} this month`;
+    document.getElementById('ov-avg').textContent = `Avg $${rev.averageOrderValue || 0}`;
+
+    const pending = (rev.statusBreakdown?.Pending || 0) + (rev.statusBreakdown?.Unshipped || 0);
+    document.getElementById('ov-pending').textContent = pending;
+
+    renderOverviewOrders(orders.orders || []);
+    renderStatusChart(rev.statusBreakdown || {});
+    renderRevChart(orders.orders || []);
+  } catch (err) {
+    console.error('Overview error:', err);
+  }
+}
+
+function renderOverviewOrders(orders) {
+  const tbody = document.getElementById('overview-orders');
+  if (!orders.length) { tbody.innerHTML = '<tr><td colspan="6"><div class="state-msg">No orders found</div></td></tr>'; return; }
+  tbody.innerHTML = orders.slice(0, 8).map(o => `<tr>
+    <td style="font-family:var(--mono);font-size:11px">${o.orderId}</td>
+    <td>${o.numberOfItems || '—'}</td>
+    <td style="font-weight:700;font-family:var(--mono)">${o.orderTotal ? '$' + parseFloat(o.orderTotal.Amount).toFixed(2) : '—'}</td>
+    <td style="font-family:var(--mono);font-size:10px">${new Date(o.purchaseDate).toLocaleDateString()}</td>
+    <td><span class="badge ${o.fulfillmentChannel === 'AFN' ? 'fba' : 'fbm'}">${o.fulfillmentChannel === 'AFN' ? 'FBA' : 'FBM'}</span></td>
+    <td><span class="badge ${o.status}">${o.status}</span></td>
+  </tr>`).join('');
+}
+
+// ── ORDERS ──
+async function loadOrders() {
+  try {
+    const data = await apiFetch('/api/orders?days=30&limit=50');
+    ordersData = data.orders || [];
+
+    const statusCount = {};
+    let fba = 0, pending = 0, shipped = 0;
+    ordersData.forEach(o => {
+      statusCount[o.status] = (statusCount[o.status] || 0) + 1;
+      if (o.fulfillmentChannel === 'AFN') fba++;
+      if (o.status === 'Pending' || o.status === 'Unshipped') pending++;
+      if (o.status === 'Shipped') shipped++;
+    });
+
+    document.getElementById('ord-total').textContent = ordersData.length;
+    document.getElementById('ord-shipped').textContent = shipped;
+    document.getElementById('ord-pending').textContent = pending;
+    document.getElementById('ord-fba').textContent = fba;
+
+    renderOrdersTable(ordersData);
+  } catch (err) {
+    console.error('Orders error:', err);
+  }
+}
+
+function filterOrders() {
+  const filter = document.getElementById('ord-status-filter').value;
+  const filtered = filter ? ordersData.filter(o => o.status === filter) : ordersData;
+  renderOrdersTable(filtered);
+}
+
+function renderOrdersTable(orders) {
+  const tbody = document.getElementById('orders-tbody');
+  if (!orders.length) { tbody.innerHTML = '<tr><td colspan="6"><div class="state-msg">No orders found</div></td></tr>'; return; }
+  tbody.innerHTML = orders.map(o => `<tr>
+    <td style="font-family:var(--mono);font-size:11px">${o.orderId}</td>
+    <td>${o.numberOfItems || '—'}</td>
+    <td style="font-weight:700;font-family:var(--mono)">${o.orderTotal ? '$' + parseFloat(o.orderTotal.Amount).toFixed(2) : '—'}</td>
+    <td style="font-family:var(--mono);font-size:10px">${new Date(o.purchaseDate).toLocaleDateString()}</td>
+    <td><span class="badge ${o.fulfillmentChannel === 'AFN' ? 'fba' : 'fbm'}">${o.fulfillmentChannel === 'AFN' ? 'FBA' : 'FBM'}</span></td>
+    <td><span class="badge ${o.status}">${o.status}</span></td>
+  </tr>`).join('');
+}
+
+// ── INVENTORY ──
+async function loadInventory() {
+  try {
+    const data = await apiFetch('/api/inventory?details=true');
+    const inv = data.inventory || [];
+
+    document.getElementById('inv-total').textContent = inv.length;
+    document.getElementById('inv-low').textContent = data.lowStockCount || 0;
+    document.getElementById('ov-skus').textContent = inv.length;
+    document.getElementById('ov-lowstock').textContent = `${data.lowStockCount || 0} low stock`;
+
+    const healthy = inv.filter(i => (i.fulfillableQuantity || i.totalQuantity || 0) >= 10).length;
+    const reserved = inv.reduce((a, i) => a + (i.reservedQuantity || 0), 0);
+    document.getElementById('inv-healthy').textContent = healthy;
+    document.getElementById('inv-reserved').textContent = reserved;
+
+    // Inventory bars (top 6)
+    const top6 = inv.slice(0, 6);
+    const maxQty = Math.max(...top6.map(i => i.totalQuantity || 0), 1);
+    document.getElementById('inv-bars').innerHTML = top6.map(i => {
+      const qty = i.fulfillableQuantity || i.totalQuantity || 0;
+      const pct = Math.round((qty / maxQty) * 100);
+      const color = qty < 10 ? 'var(--red)' : qty < 30 ? 'var(--amazon)' : 'var(--green)';
+      return `<div class="inv-item">
+        <div class="inv-label"><span style="font-weight:600;font-size:12px">${i.sellerSku || i.asin}</span><span style="font-family:var(--mono);font-size:10px;color:var(--muted)">${qty} units</span></div>
+        <div class="inv-bar"><div class="inv-fill" style="width:${pct}%;background:${color}"></div></div>
+      </div>`;
+    }).join('') || '<div class="state-msg">No inventory data</div>';
+
+    // Full table
+    const tbody = document.getElementById('inv-tbody');
+    tbody.innerHTML = inv.map(i => `<tr>
+      <td style="font-family:var(--mono);font-size:11px">${i.sellerSku || '—'}</td>
+      <td style="font-family:var(--mono);font-size:11px">${i.asin || '—'}</td>
+      <td style="font-size:12px">${i.productName ? i.productName.slice(0, 40) + '…' : '—'}</td>
+      <td style="font-weight:700;font-family:var(--mono)">${i.fulfillableQuantity ?? '—'}</td>
+      <td style="font-family:var(--mono)">${i.reservedQuantity ?? '—'}</td>
+      <td style="font-family:var(--mono)">${i.unfulfillableQuantity ?? '—'}</td>
+      <td style="font-weight:700;font-family:var(--mono)">${i.totalQuantity ?? '—'}</td>
+    </tr>`).join('') || '<tr><td colspan="7"><div class="state-msg">No inventory found</div></td></tr>';
+
+    renderStockChart(inv);
+  } catch (err) {
+    console.error('Inventory error:', err);
+  }
+}
+
+// ── ANALYTICS ──
+async function loadAnalytics() {
+  const days = document.getElementById('an-days')?.value || 30;
+  const endDate = new Date().toISOString();
+  const startDate = new Date(Date.now() - days * 86400000).toISOString();
+
+  try {
+    const data = await apiFetch(`/api/analytics/sales?interval=DAY&startDate=${startDate}&endDate=${endDate}`);
+    const metrics = data.metrics || [];
+    const totals = data.totals || {};
+
+    document.getElementById('an-sales').textContent = '$' + (totals.totalSalesAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
+    document.getElementById('an-units').textContent = (totals.unitCount || 0).toLocaleString();
+    document.getElementById('an-count').textContent = (totals.orderCount || 0).toLocaleString();
+
+    const avgPrice = totals.orderCount > 0 ? (totals.totalSalesAmount / totals.orderCount).toFixed(2) : 0;
+    document.getElementById('an-avg-price').textContent = '$' + avgPrice;
+
+    renderSalesChart(metrics);
+    renderUnitsChart(metrics);
+  } catch (err) {
+    console.error('Analytics error:', err);
+  }
+}
+
+// ── CHARTS ──
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+const baseOpts = (extra = {}) => ({
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { family: 'Space Mono', size: 9 }, color: '#9a9590' } },
+    y: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { family: 'Space Mono', size: 9 }, color: '#9a9590' } },
+  },
+  ...extra,
+});
+
+function renderRevChart(orders) {
+  destroyChart('revenueChart');
+  const byDay = {};
+  orders.forEach(o => {
+    const d = new Date(o.purchaseDate).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    byDay[d] = (byDay[d] || 0) + parseFloat(o.orderTotal?.Amount || 0);
+  });
+  const labels = Object.keys(byDay).slice(-14);
+  const vals = labels.map(l => byDay[l] || 0);
+  charts.revenueChart = new Chart(document.getElementById('revenueChart'), {
+    type: 'line',
+    data: { labels, datasets: [{ data: vals, borderColor: '#ff9500', backgroundColor: 'rgba(255,149,0,0.07)', fill: true, tension: 0.4, pointRadius: 3, pointBackgroundColor: '#ff9500' }] },
+    options: baseOpts(),
+  });
+}
+
+function renderStatusChart(statusBreakdown) {
+  destroyChart('statusChart');
+  const labels = Object.keys(statusBreakdown);
+  const vals = Object.values(statusBreakdown);
+  const colors = { Shipped:'#1a7a4a', Pending:'#e07800', Delivered:'#1a4a8a', Canceled:'#c0392b', Unshipped:'#9a9590' };
+  charts.statusChart = new Chart(document.getElementById('statusChart'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: vals, backgroundColor: labels.map(l => colors[l] || '#ccc'), borderWidth: 0 }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: true, position: 'bottom', labels: { font: { family:'Space Mono', size:9 }, color:'#9a9590', boxWidth:10 } } } },
+  });
+}
+
+function renderStockChart(inv) {
+  destroyChart('stockChart');
+  const healthy = inv.filter(i => (i.totalQuantity || 0) >= 10).length;
+  const low = inv.filter(i => (i.totalQuantity || 0) > 0 && (i.totalQuantity || 0) < 10).length;
+  const outOfStock = inv.filter(i => (i.totalQuantity || 0) === 0).length;
+  charts.stockChart = new Chart(document.getElementById('stockChart'), {
+    type: 'doughnut',
+    data: { labels: ['Healthy (10+)', 'Low (<10)', 'Out of Stock'], datasets: [{ data: [healthy, low, outOfStock], backgroundColor: ['#1a7a4a','#e07800','#c0392b'], borderWidth: 0 }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: true, position: 'bottom', labels: { font: { family:'Space Mono', size:9 }, color:'#9a9590', boxWidth:10 } } } },
+  });
+}
+
+function renderSalesChart(metrics) {
+  destroyChart('salesChart');
+  const labels = metrics.map(m => new Date(m.interval?.split('--')[0]).toLocaleDateString('en-US',{month:'short',day:'numeric'}));
+  const vals = metrics.map(m => parseFloat(m.totalSales?.amount || 0));
+  charts.salesChart = new Chart(document.getElementById('salesChart'), {
+    type: 'bar',
+    data: { labels, datasets: [{ data: vals, backgroundColor: 'rgba(255,149,0,0.75)', borderRadius: 4 }] },
+    options: baseOpts(),
+  });
+}
+
+function renderUnitsChart(metrics) {
+  destroyChart('unitsChart');
+  const labels = metrics.map(m => new Date(m.interval?.split('--')[0]).toLocaleDateString('en-US',{month:'short',day:'numeric'}));
+  const vals = metrics.map(m => m.unitCount || 0);
+  charts.unitsChart = new Chart(document.getElementById('unitsChart'), {
+    type: 'line',
+    data: { labels, datasets: [{ data: vals, borderColor: '#1a7a4a', backgroundColor: 'rgba(26,122,74,0.07)', fill: true, tension: 0.4, pointRadius: 3 }] },
+    options: baseOpts(),
+  });
+}
+
+// ── INIT ──
+checkStatus();
+</script>
+</body>
+</html>

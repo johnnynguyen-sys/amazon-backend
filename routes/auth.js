@@ -97,4 +97,46 @@ router.get('/marketplaces', async (req, res) => {
   }
 });
 
+// POST /api/auth/test — test credentials sent from frontend settings page
+router.post('/test', async (req, res) => {
+  const { lwaClientId, lwaClientSecret, refreshToken, awsAccessKey, awsSecretKey, awsRegion, marketplaceId } = req.body;
+
+  const result = { lwa: false, spapi: false, marketplace: false };
+
+  try {
+    // Test LWA token
+    const tokenRes = await axios.post('https://api.amazon.com/auth/o2/token', {
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: lwaClientId,
+      client_secret: lwaClientSecret,
+    }, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+
+    if (tokenRes.data.access_token) {
+      result.lwa = true;
+
+      // Test SP-API with these credentials
+      const spApiAuth = require('../config/spapi-auth');
+      try {
+        const testRes = await spApiAuth.makeSignedRequest({
+          method: 'GET',
+          path: '/sellers/v1/marketplaceParticipations',
+          accessToken: tokenRes.data.access_token,
+          awsAccessKey, awsSecretKey,
+          awsRegion: awsRegion || 'us-east-1',
+        });
+        result.spapi = true;
+        result.marketplace = testRes.data?.payload?.some(p => p.marketplace?.id === marketplaceId) ?? true;
+      } catch(e) {
+        result.spapiError = e.message;
+      }
+    }
+  } catch(e) {
+    result.lwaError = e.response?.data?.error_description || e.message;
+    return res.status(400).json({ ...result, message: result.lwaError });
+  }
+
+  res.json(result);
+});
+
 module.exports = router;
